@@ -13,20 +13,19 @@ ensemble, a Mammo-CLIP linear probe, a vendor device) means writing one
 The pipeline will, in fact, *quantify* exactly how much the baseline falls
 short -- which is the honest thing for a validation tool to do.
 
-Preprocessing robustness
-------------------------
-Many fine-tuned checkpoints publish model weights but forget to push a
-``preprocessor_config.json``. ``HFImageClassifier`` therefore loads its image
-preprocessing in three tiers and never assumes the checkpoint is well-formed:
+Robustness to malformed checkpoints
+-----------------------------------
+Community checkpoints are frequently published with defective metadata. This
+adapter defends against the two common defects so the pipeline still runs:
 
-1. the checkpoint's own image processor;
-2. failing that, the base backbone's image processor (same input size and
-   normalisation the model was trained with);
-3. failing that, a manual resize + ImageNet-normalise transform built from the
-   model ``config`` -- so the adapter still runs.
-
-``preprocess_source`` records which tier was used, and is surfaced in the
-notebook so the choice is transparent in the validation report.
+* **Bad ``model_type``.** Some configs set ``model_type`` to the full
+  checkpoint name instead of the architecture key (e.g. ``swinv2``), which
+  breaks ``AutoModel``. ``_load_model`` recovers the true type from the
+  ``architectures`` field and reloads with a corrected config.
+* **Missing ``preprocessor_config.json``.** Image preprocessing is loaded in
+  three tiers -- the checkpoint's own processor, then the base backbone's
+  processor, then a manual resize + ImageNet-normalise transform built from the
+  model config. ``preprocess_source`` records which tier was used.
 """
 from __future__ import annotations
 
@@ -72,17 +71,13 @@ class HFImageClassifier(ImageClassifier):
     def __init__(self, model_id=DEFAULT_MODEL, device=None,
                  malignant_keywords=("cancer", "malign", "abnormal", "pos"),
                  fallback_processors=FALLBACK_PROCESSORS):
-        from transformers import AutoImageProcessor, AutoModelForImageClassification
+        from transformers import AutoImageProcessor
         import torch
 
         self._torch = torch
         self.model_id = model_id
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = (
-            AutoModelForImageClassification.from_pretrained(model_id)
-            .to(self.device)
-            .eval()
-        )
+        self.model = self._load_model(model_id).to(self.device).eval()
 
         # --- image preprocessing: robust 3-tier loading --------------------
         self.processor = None
@@ -116,6 +111,69 @@ class HFImageClassifier(ImageClassifier):
             self.malignant_index = 0
         self.id2label = id2label
         self.name = f"hf:{model_id}"
+
+    # ------------------------------------------------------------ model load
+    # Backbone inference from a malformed ``model_type`` string. Ordered so
+    # that more specific keys (swinv2, convnextv2) are tested before their
+    # prefixes (swin, convnext).
+    _ARCH_HINTS = (
+        ("swinv2", "Swinv2ForImageClassification"),
+        ("swin", "SwinForImageClassification"),
+        ("convnextv2", "ConvNextV2ForImageClassification"),
+        ("convnext", "ConvNextForImageClassification"),
+        ("deit", "DeiTForImageClassification"),
+        ("vit", "ViTForImageClassification"),
+    )
+
+    @staticmethod
+    def _load_model(model_id):
+        """Load the classifier, repairing a malformed ``config.json`` if needed.
+
+        Tries ``AutoModelForImageClassification`` first. If the config has a
+        ``model_type`` Transformers does not recognise (a common community-
+        upload defect), the real architecture is recovered -- from the
+        ``architectures`` field, or by inferring the backbone from the bad
+        ``model_type`` string -- and the model is reloaded with a corrected
+        config object.
+        """
+        from transformers import AutoModelForImageClassification
+        try:
+            return AutoModelForImageClassification.from_pretrained(model_id)
+        except (ValueError, KeyError):
+            pass  # fall through to the repair path
+
+        import json
+        import transformers
+        from huggingface_hub import hf_hub_download
+
+        with open(hf_hub_download(model_id, "config.json")) as fh:
+            cfg = json.load(fh)
+
+        # 1) trust the architectures field when it names a known class
+        arch = (cfg.get("architectures") or [None])[0]
+        model_cls = getattr(transformers, arch, None) if arch else None
+
+        # 2) otherwise infer the backbone from the malformed model_type string
+        if model_cls is None:
+            model_type = str(cfg.get("model_type", "")).lower()
+            for hint, cls_name in HFImageClassifier._ARCH_HINTS:
+                if hint in model_type:
+                    model_cls = getattr(transformers, cls_name, None)
+                    if model_cls is not None:
+                        break
+
+        if model_cls is None:
+            raise ValueError(
+                f"Cannot repair config.json for '{model_id}': unrecognised "
+                f"architecture (architectures={arch!r}, "
+                f"model_type={cfg.get('model_type')!r}).")
+
+        config_cls = model_cls.config_class
+        cfg.pop("model_type", None)            # drop the bad value
+        config = config_cls.from_dict(cfg)     # falls back to the class default
+        print(f"[HFImageClassifier] repaired malformed config.json -> "
+              f"{model_cls.__name__} (model_type '{config.model_type}')")
+        return model_cls.from_pretrained(model_id, config=config)
 
     # ----------------------------------------------------------------- utils
     def _infer_image_size(self):
