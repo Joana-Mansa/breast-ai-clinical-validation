@@ -12,10 +12,10 @@
 *.onnx
 /weights/
 
-# Pipeline outputs
+# Pipeline outputs (generated reports land here; a curated copy of the
+# real report is committed under docs/ deliberately).
 /outputs/
 /reports/
-*.html
 
 # Credentials
 kaggle.json
