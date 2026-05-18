@@ -38,22 +38,33 @@ def notebook(cells):
 
 
 _SETUP_PACKAGE = """\
-# Locate the mammoval package. Works on Colab and Kaggle, whether you
-# git-cloned the repo or added it as a Kaggle dataset / uploaded the folder.
-import os, sys, glob
-cands = ['.', 'breast-ai-clinical-validation', '/content/breast-ai-clinical-validation']
-cands += glob.glob('/kaggle/input/*') + glob.glob('/kaggle/input/*/*')
-cands += glob.glob('/kaggle/working/*')
-for c in cands:
-    if c and os.path.isdir(os.path.join(c, 'mammoval')):
-        sys.path.insert(0, os.path.abspath(c)); print('found mammoval in', c); break
-else:
-    raise RuntimeError(
-        'mammoval package not found. Either (a) enable Internet and run '
-        '!git clone <your-repo-url>, or (b) add the project folder as a '
-        'Kaggle dataset via "+ Add Input".')
+# Make the `mammoval` package importable. Auto-clones the project repo if it
+# is not already present (Internet must be ON for the clone on Kaggle).
+import os, sys, glob, subprocess
+
+REPO_URL = 'https://github.com/Joana-Mansa/breast-ai-clinical-validation.git'
+
+def _find_mammoval():
+    cands = ['.', 'breast-ai-clinical-validation',
+             '/content/breast-ai-clinical-validation']
+    cands += glob.glob('/kaggle/input/*') + glob.glob('/kaggle/input/*/*')
+    cands += glob.glob('/kaggle/working/*')
+    for c in cands:
+        if c and os.path.isdir(os.path.join(c, 'mammoval')):
+            return os.path.abspath(c)
+    return None
+
+loc = _find_mammoval()
+if loc is None:
+    print('cloning', REPO_URL, '...')
+    subprocess.run(['git', 'clone', '-q', REPO_URL], check=False)
+    loc = _find_mammoval()
+if loc is None:
+    raise RuntimeError('mammoval not found and clone failed - turn Internet ON, '
+                       'or add the project folder as a Kaggle dataset (+ Add Input).')
+sys.path.insert(0, loc)
 import mammoval
-print('mammoval', mammoval.__version__, 'ready')"""
+print('mammoval', mammoval.__version__, 'ready (from ' + loc + ')')"""
 
 
 # ==========================================================================
@@ -82,13 +93,13 @@ def build_2d():
         md("## 1 · Environment setup\n"
            "Runs on **Google Colab** or **Kaggle**.\n"
            "\n"
-           "**On Kaggle:** in the right-hand panel set *Accelerator* to a GPU "
-           "and turn *Internet* **On** (needed to `pip install transformers` and "
-           "download the model from the HuggingFace Hub).\n"
+           "**On Kaggle:** in the *Notebook options* panel set *Accelerator* to "
+           "a **GPU** and turn *Internet* **On** — both are required. Internet "
+           "lets the notebook install packages, fetch the model, and clone the "
+           "project code.\n"
            "\n"
-           "Get the `mammoval` package onto the machine first — either enable "
-           "Internet and `!git clone` your repo, or add the project folder as a "
-           "dataset via *+ Add Input*. Then run the cells below."),
+           "The next cell installs dependencies; the one after it auto-clones "
+           "the `mammoval` package if it is not already present."),
         code("!pip install -q transformers timm pillow\n"
              "# torch / torchvision / pydicom are pre-installed on Colab and Kaggle."),
         code(_SETUP_PACKAGE),
@@ -230,9 +241,9 @@ def build_3d():
 
         md("## 1 · Environment setup\n"
            "Runs on **Colab** or **Kaggle**. On Kaggle, set *Accelerator* to a "
-           "GPU and turn *Internet* **On** (needed for the installs, the TCIA "
-           "download and the model). Get the `mammoval` package onto the "
-           "machine first — `!git clone` your repo, or add it as a dataset."),
+           "**GPU** and turn *Internet* **On** (required for the installs, the "
+           "TCIA download, the model, and cloning the project code). The setup "
+           "cell below auto-clones the `mammoval` package if needed."),
         code("!pip install -q transformers timm pydicom pylibjpeg pylibjpeg-libjpeg "
              "pylibjpeg-openjpeg tcia_utils\n"
              "# torch / torchvision are pre-installed on Colab and Kaggle."),
