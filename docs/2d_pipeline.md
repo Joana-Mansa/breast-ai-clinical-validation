@@ -291,10 +291,13 @@ patch/ROI-based model or higher input resolution would score higher.
 
 What matters for this project: the validation pipeline now characterises a
 model that genuinely discriminates. The ROC, operating points, calibration,
-screening behaviour, breast-density subgroup analysis and BI-RADS comparison in
-the generated report (`outputs/cbis_ddsm_validation_report.html`) are all
-measured on a working model, with confidence intervals throughout. That
+screening behaviour, breast-density subgroup analysis and BI-RADS comparison
+are all measured on a working model, with confidence intervals throughout. That
 rigorous measurement — not the model — is the deliverable.
+
+The actual generated report from this run is committed at
+[`cbis_ddsm_validation_report.html`](cbis_ddsm_validation_report.html) (a
+[rendered view](https://htmlpreview.github.io/?https://github.com/Joana-Mansa/breast-ai-clinical-validation/blob/main/docs/cbis_ddsm_validation_report.html)).
 
 ---
 

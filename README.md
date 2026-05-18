@@ -93,6 +93,11 @@ python scripts/run_validation.py preds.csv \
 
 ## The validation report
 
+A **real example**, generated on the CBIS-DDSM test split (fine-tuned ResNet-50,
+AUC 0.772), is committed at
+[`docs/cbis_ddsm_validation_report.html`](docs/cbis_ddsm_validation_report.html)
+— [**rendered view**](https://htmlpreview.github.io/?https://github.com/Joana-Mansa/breast-ai-clinical-validation/blob/main/docs/cbis_ddsm_validation_report.html).
+
 A single HTML file with ten sections:
 
 1. **Executive summary** — headline AUC, operating point, reader verdict
