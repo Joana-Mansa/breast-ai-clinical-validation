@@ -1,17 +1,14 @@
 """2D mammography model adapters.
 
-The default adapter wraps a HuggingFace image-classification checkpoint. The
-default is ``keanteng/swin-v2-large-ft-breast-cancer-classification`` -- it
-loads with no training step, which is why it is the pipeline's out-of-the-box
-model.
+This adapter wraps a HuggingFace ``AutoModelForImageClassification`` checkpoint
+so any well-formed image classifier on the Hub can be validated as a black box.
 
-It is, however, a *baseline*: a Swin-V2 head fine-tuned on Mini-DDSM-derived
-images at 192x192. The point of this project is not the model -- it is the
-validation. Swapping in a stronger model (the RSNA-2023 winning ConvNeXt
-ensemble, a Mammo-CLIP linear probe, a vendor device) means writing one
-``ImageClassifier`` subclass; the metrics, report and notebooks are unchanged.
-The pipeline will, in fact, *quantify* exactly how much the baseline falls
-short -- which is the honest thing for a validation tool to do.
+It is *not* the pipeline's default model: reliable ready-made mammography
+classifiers are scarce on public hubs and community uploads are frequently
+broken, so the notebooks use :class:`~mammoval.models.linear_probe.
+LinearProbeClassifier` instead. ``HFImageClassifier`` remains here for the case
+where a trustworthy fine-tuned checkpoint *is* available -- swapping it in
+means changing one line; the metrics, report and notebooks are unchanged.
 
 Robustness to malformed checkpoints
 -----------------------------------
