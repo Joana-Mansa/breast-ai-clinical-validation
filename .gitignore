@@ -1,0 +1,32 @@
+# Data — never commit medical images or PHI-adjacent files
+data/
+*.dcm
+*.DICOM
+
+# Model weights
+*.pth
+*.pt
+*.ckpt
+*.onnx
+weights/
+
+# Pipeline outputs
+outputs/
+reports/
+*.html
+
+# Credentials
+kaggle.json
+.kaggle/
+*.pem
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+build/
+dist/
+.venv/
+venv/

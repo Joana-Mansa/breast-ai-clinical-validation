@@ -1,0 +1,8 @@
+# Optional — only needed to run *real* pretrained model inference.
+# The validation engine, synthetic demo and unit tests run without these.
+# In Colab, torch + torchvision are pre-installed.
+torch>=2.0
+torchvision>=0.15
+timm>=0.9
+huggingface_hub>=0.20
+opencv-python-headless>=4.7

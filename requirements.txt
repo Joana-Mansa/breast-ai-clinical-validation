@@ -1,0 +1,16 @@
+# Core validation engine — required to run the metrics, pipeline and report.
+numpy>=1.23
+scipy>=1.9
+pandas>=1.5
+scikit-learn>=1.1
+matplotlib>=3.5
+tqdm>=4.64
+pyyaml>=6.0
+jinja2>=3.1
+
+# Medical imaging I/O (dataset loaders)
+pydicom>=2.3
+pillow>=9.0
+
+# Model adapters (optional — see requirements-models.txt for the heavier
+# deep-learning stack; the validation engine itself does not need them).

@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mammoval"
+version = "0.1.0"
+description = "Clinical validation pipeline for 2D and 3D mammography breast-cancer AI"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Joana Owusu-Appiah" }]
+dependencies = [
+    "numpy>=1.23",
+    "scipy>=1.9",
+    "pandas>=1.5",
+    "scikit-learn>=1.1",
+    "matplotlib>=3.5",
+    "tqdm>=4.64",
+    "pyyaml>=6.0",
+    "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+io = ["pydicom>=2.3", "pillow>=9.0"]
+models = ["torch>=2.0", "torchvision>=0.15", "timm>=0.9", "huggingface_hub>=0.20"]
+test = ["pytest>=7.0"]
+
+[tool.setuptools.packages.find]
+include = ["mammoval*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
