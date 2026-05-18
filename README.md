@@ -76,7 +76,9 @@ since CBIS-DDSM is a native Kaggle dataset (just *+ Add Input*).
 | [`notebooks/01_validation_2d_cbis_ddsm.ipynb`](notebooks/01_validation_2d_cbis_ddsm.ipynb) | 2D mammography | CBIS-DDSM (Kaggle JPEG mirror, ~6 GB) | HuggingFace Swin-V2 breast classifier |
 | [`notebooks/02_validation_3d_duke_dbt.ipynb`](notebooks/02_validation_3d_duke_dbt.ipynb) | 3D tomosynthesis | Duke BCS-DBT (TCIA subset) | 2D model aggregated over slices |
 
-Dataset access and caveats: [`docs/datasets.md`](docs/datasets.md).
+Dataset access and caveats: [`docs/datasets.md`](docs/datasets.md). Full 2D
+pipeline walkthrough — components, model, results, engineering log:
+[`docs/2d_pipeline.md`](docs/2d_pipeline.md).
 
 You can also run the pipeline headless on any predictions CSV:
 
