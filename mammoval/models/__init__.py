@@ -18,6 +18,7 @@ in ``torch``/``transformers``, so the metrics engine stays light.
 from .base import ImageClassifier, VolumeClassifier
 from .synthetic import simulate_scores, simulate_detections
 from .linear_probe import LinearProbeClassifier
+from .finetune import FineTunedClassifier
 from .adapters_3d import SliceAggregatorClassifier
 from .inference import score_dataset
 
@@ -25,6 +26,7 @@ __all__ = [
     "ImageClassifier",
     "VolumeClassifier",
     "LinearProbeClassifier",
+    "FineTunedClassifier",
     "SliceAggregatorClassifier",
     "simulate_scores",
     "simulate_detections",
