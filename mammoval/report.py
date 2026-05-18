@@ -329,15 +329,114 @@ _TEMPLATE = r"""<!doctype html>
 """
 
 
-def build_report(classification_results, localization_results=None,
+# Compact template for a localisation-only (FROC) report — used when the study
+# has no exam-level classification arm (e.g. the 3D FROC pipeline run alone).
+_LOCALIZATION_TEMPLATE = r"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>{{ title }}</title>
+<style>
+ body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+   color:#1d2630;max-width:1080px;margin:0 auto;padding:32px 28px;line-height:1.5;}
+ h1{font-size:25px;border-bottom:3px solid #1f5fa8;padding-bottom:8px;margin-bottom:4px;}
+ h2{font-size:19px;color:#1f5fa8;margin-top:34px;border-bottom:1px solid #d8dee6;padding-bottom:4px;}
+ .sub{color:#6b7785;font-size:13px;margin-top:0;}
+ table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13px;}
+ th,td{border:1px solid #d8dee6;padding:6px 9px;text-align:left;}
+ th{background:#eef2f7;}
+ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;}
+ .kpi{display:flex;flex-wrap:wrap;gap:14px;margin:16px 0;}
+ .card{flex:1 1 200px;background:#f6f8fb;border:1px solid #d8dee6;border-radius:8px;padding:12px 14px;}
+ .card .v{font-size:23px;font-weight:600;color:#1f5fa8;}
+ .card .l{font-size:11px;color:#6b7785;text-transform:uppercase;letter-spacing:.4px;}
+ .card .s{font-size:11px;color:#6b7785;}
+ img{max-width:100%;border:1px solid #e3e8ee;border-radius:6px;margin:8px 0;}
+ .row{display:flex;gap:18px;flex-wrap:wrap;}
+ .row>div{flex:1 1 340px;}
+ .note{padding:10px 14px;border-radius:6px;font-size:13px;margin:10px 0;
+   background:#eef2f7;border-left:4px solid #1f5fa8;}
+ footer{margin-top:40px;border-top:1px solid #d8dee6;padding-top:10px;
+   color:#6b7785;font-size:11px;}
+ code{background:#eef2f7;padding:1px 4px;border-radius:3px;font-size:12px;}
+</style></head><body>
+
+<h1>{{ title }}</h1>
+<p class="sub">Generated {{ generated }} &middot; mammoval clinical validation pipeline</p>
+
+<div class="note">
+ <b>Scope.</b> Standalone <b>lesion-localisation</b> validation of a breast-cancer
+ detection AI. FROC scores every region <i>mark</i> the device emits — a mark
+ counts only when it lands on a real lesion under the geometric hit criterion —
+ so it measures detection quality that an exam-level AUC cannot see.
+</div>
+
+<h2>1 &nbsp; Localisation cohort</h2>
+<table>
+ <tr><th>Dataset</th><td>{{ froc.meta.dataset }}</td>
+     <th>Volumes / images</th><td class="n">{{ froc.meta.n_cases }}</td></tr>
+ <tr><th>Ground-truth lesions</th><td class="n">{{ froc.meta.n_lesions }}</td>
+     <th>Operating points</th>
+     <td class="n">{{ froc.meta.fp_points|join(', ') }} FP/volume</td></tr>
+</table>
+
+<h2>2 &nbsp; FROC &mdash; free-response ROC</h2>
+<p>FROC plots lesion-localisation sensitivity against the mean number of false
+ marks per volume. The mean sensitivity at 1/2/3/4 false marks per volume
+ reproduces the official Duke BCS-DBT / DBTex challenge ranking metric.</p>
+<div class="kpi">
+ <div class="card"><div class="l">Mean FROC sensitivity</div>
+  <div class="v">{{ froc.mean_sensitivity|num }}</div>
+  <div class="s">95% CI {{ froc.mean_sensitivity_ci|ci }} (case bootstrap)</div></div>
+ <div class="card"><div class="l">Ground-truth lesions</div>
+  <div class="v">{{ froc.meta.n_lesions }}</div>
+  <div class="s">over {{ froc.meta.n_cases }} volumes</div></div>
+</div>
+<div class="row">
+ <div><img src="{{ plots.froc }}" alt="FROC curve"></div>
+ <div>
+ <table>
+  <tr><th>False marks / volume</th><th>Localisation sensitivity</th></tr>
+ {% for label, sens in froc.sensitivity_at_fp.items() %}
+  <tr><td class="n">{{ label.split('_')[1] }}</td>
+      <td class="n">{{ sens|pct }}</td></tr>
+ {% endfor %}
+  <tr><th>Mean</th><th class="n">{{ froc.mean_sensitivity|pct }}</th></tr>
+ </table>
+ </div>
+</div>
+
+<h2>3 &nbsp; Method</h2>
+<p>True-positive criterion (the official Duke BCS-DBT rule): a predicted box
+ centre is a hit when it lies within
+ <code>max(&radic;(W&sup2;+H&sup2;)/2, 100)</code> pixels of a ground-truth box
+ centre <b>and</b> within <code>VolumeSlices/4</code> slices of it. Within each
+ volume, detections are matched to lesions greedily in descending score order;
+ the confidence interval on mean sensitivity is a case-level bootstrap.</p>
+
+<h2>4 &nbsp; Limitations &amp; interpretation notes</h2>
+<ul>{% for item in limitations %}<li>{{ item }}</li>{% endfor %}</ul>
+
+<footer>
+ mammoval v{{ version }} &middot; FROC per the Duke BCS-DBT criterion &middot;
+ This is a methodological / educational validation pipeline, not a regulatory
+ submission and not a cleared medical device.
+</footer>
+</body></html>
+"""
+
+
+def build_report(classification_results=None, localization_results=None,
                  output_path="validation_report.html",
                  title="Mammography AI - Clinical Validation Report",
                  extra_limitations=None):
     """Render results to a standalone HTML file.
 
+    Supply ``classification_results`` for an exam-level report (optionally with
+    ``localization_results`` adding a FROC section), or ``localization_results``
+    alone for a standalone FROC localisation report.
+
     Parameters
     ----------
-    classification_results : dict
+    classification_results : dict, optional
         Output of :func:`mammoval.pipeline.run_classification_validation`.
     localization_results : dict, optional
         Output of :func:`mammoval.pipeline.run_localization_validation`.
@@ -351,6 +450,37 @@ def build_report(classification_results, localization_results=None,
     str : ``output_path``.
     """
     from . import __version__
+
+    env = Environment(autoescape=False)
+    env.filters.update(num=_num, pct=_pct, ci=_ci)
+    generated = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # ---- localisation-only report (no classification arm) -----------------
+    if classification_results is None:
+        if localization_results is None:
+            raise ValueError("build_report needs classification_results, "
+                             "localization_results, or both")
+        loc_limits = [
+            "Localisation is scored against ground-truth boxes for biopsied "
+            "lesions only; other findings are not part of the lesion set.",
+            "The true-positive criterion is geometric (a mark within tolerance "
+            "of a lesion centre), not a radiologist's judgement of relevance.",
+            "Confidence intervals are case-level bootstrap and cover sampling "
+            "error only - not distribution shift across vendor, site or era.",
+            "Standalone retrospective localisation: it does not establish how "
+            "radiologists perform WITH the device (that needs an MRMC study).",
+        ]
+        if extra_limitations:
+            loc_limits.extend(extra_limitations)
+        html = env.from_string(_LOCALIZATION_TEMPLATE).render(
+            title=title, generated=generated, version=__version__,
+            froc=localization_results,
+            plots={"froc": plotting.froc_plot(localization_results)},
+            limitations=loc_limits,
+        )
+        with open(output_path, "w", encoding="utf-8") as fh:
+            fh.write(html)
+        return output_path
 
     r = classification_results
     ops = r.get("operating_points", {})
@@ -381,11 +511,9 @@ def build_report(classification_results, localization_results=None,
     if extra_limitations:
         limitations.extend(extra_limitations)
 
-    env = Environment(autoescape=False)
-    env.filters.update(num=_num, pct=_pct, ci=_ci)
     html = env.from_string(_TEMPLATE).render(
         title=title,
-        generated=_dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        generated=generated,
         version=__version__,
         meta=r["meta"],
         d=r["discrimination"],

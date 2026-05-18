@@ -20,7 +20,9 @@ For binary cancer detection the positive class is ``Cancer``; ``Normal``,
 from __future__ import annotations
 
 import glob
+import io
 import os
+import zipfile
 
 import numpy as np
 import pandas as pd
@@ -86,9 +88,11 @@ class DukeDBTDataset(MammoDataset):
         df["volume_path"] = df[path_col].apply(lambda p: os.path.join(self.root, str(p)))
         df["case_id"] = df["StudyUID"].astype(str) + "::" + df["View"].astype(str)
         df["patient_id"] = df["PatientID"].astype(str)
-        df["view"] = df["View"].astype(str)
-        df["laterality"] = df["View"].astype(str).str[0].map({"L": "Left", "R": "Right"})
-        df["projection"] = df["View"].astype(str).str[1:]
+        # `View` is lower-case in the CSVs (e.g. "lcc", "rmlo"); upper-case it
+        # for display and derive laterality/projection from the upper form.
+        df["view"] = df["View"].astype(str).str.upper()
+        df["laterality"] = df["view"].str[0].map({"L": "Left", "R": "Right"})
+        df["projection"] = df["view"].str[1:]
         df["modality"] = "3D"
 
         cases = df[["case_id", "patient_id", "StudyUID", "view", "laterality",
@@ -156,6 +160,50 @@ class DukeDBTDataset(MammoDataset):
              "detections": by_case[cid]}
             for cid in self.cases["case_id"]
         ]
+
+    def read_dbtex_predictions(self, source, team, phase="phase2"):
+        """Load a DBTex-challenge team's detector predictions for this split.
+
+        The Duke group published the DBTex1/DBTex2 challenge submissions in
+        ``team_predictions_bothphases.zip`` (on the TCIA collection page). This
+        reads one team's predictions for this dataset's split and converts the
+        corner-coordinate boxes into the centre-coordinate table that
+        :meth:`assemble_froc_cases` consumes — so the FROC engine can score a
+        *real* competition detector, not a simulated one.
+
+        Parameters
+        ----------
+        source : str
+            Path to ``team_predictions_bothphases.zip`` (or an extracted dir).
+        team : str
+            Team name, e.g. ``'nyu_bteam'``, ``'vicorob'``, ``'zedus'``.
+        phase : {'phase2', 'phase1'}
+            Challenge phase; ``phase2`` matches the PHASE-2 ground-truth boxes.
+
+        Returns
+        -------
+        pandas.DataFrame with columns ``case_id, score, x, y, slice``.
+        """
+        rel = f"{phase}/{self.split}/{team}.csv"
+        if str(source).lower().endswith(".zip"):
+            with zipfile.ZipFile(source) as zf:
+                match = next(
+                    (n for n in zf.namelist()
+                     if n.endswith(rel) and not n.split("/")[-1].startswith("._")),
+                    None)
+                if match is None:
+                    raise FileNotFoundError(f"{rel} not found inside {source}")
+                raw = pd.read_csv(io.BytesIO(zf.read(match)))
+        else:
+            raw = pd.read_csv(os.path.join(source, phase, self.split, f"{team}.csv"))
+
+        return pd.DataFrame({
+            "case_id": raw["StudyUID"].astype(str) + "::" + raw["View"].astype(str),
+            "score": raw["Score"].astype(float),
+            "x": raw["X"].astype(float) + raw["Width"].astype(float) / 2.0,
+            "y": raw["Y"].astype(float) + raw["Height"].astype(float) / 2.0,
+            "slice": raw["Z"].astype(float),
+        })
 
     # ------------------------------------------------------------------ load
     def load(self, row):

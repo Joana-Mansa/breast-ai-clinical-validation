@@ -26,7 +26,7 @@ as a sealed black box, and reporting where it works and where it fails.
 - Reports every estimate with a **confidence interval** — DeLong for AUC,
   Wilson for proportions, bootstrap (incl. patient-level cluster) elsewhere.
 - Emits a single self-contained **HTML validation report** with embedded plots.
-- Is **unit-tested** (28 tests pinning metrics to known-by-construction values)
+- Is **unit-tested** (38 tests pinning metrics to known-by-construction values)
   and runs **end-to-end with zero downloads** via a synthetic demo.
 
 ---
@@ -40,10 +40,10 @@ Honesty is part of a validation tool. Here is exactly what runs out of the box:
 | Validation metrics engine | ✅ Real, unit-tested, verified against `sklearn` and known values |
 | Pipeline + HTML report | ✅ Real, runs end-to-end |
 | Synthetic demo (no downloads) | ✅ Runs in ~30 s — the runnability guarantee |
-| 2D path: CBIS-DDSM loader + HuggingFace model | ✅ Real, runnable in Colab (needs a free Kaggle account) |
-| 3D path: Duke BCS-DBT loader + slice-aggregated classifier | ✅ Real, runnable on a downloaded subset (TCIA) |
-| 3D localisation (FROC) | ✅ Engine real & tested to the **official Duke metric**; needs a detector's `predictions.csv` — no DBT detector has public weights, so the notebook supplies a clearly-labelled simulated one |
-| Default models | ⚠️ Verified-runnable **baselines**, not state-of-the-art — the pipeline *quantifies* their shortfall rather than hiding it |
+| 2D path: CBIS-DDSM + fine-tuned CNN | ✅ Real & verified — AUC 0.772 on the CBIS-DDSM test split |
+| 3D path: Duke BCS-DBT FROC localisation | ✅ Real & verified — validates the real DBTex-challenge detector submissions against the official Duke metric, on a few MB of metadata |
+| 3D exam-level classification | ⚠️ Documented heavier extension — needs the ~1.5 TB DICOM set; no public 3D detector exists |
+| Default models | ⚠️ Reasonable **baselines**, not state-of-the-art — the pipeline *quantifies* their shortfall rather than hiding it |
 
 See [`docs/methodology.md`](docs/methodology.md) for the reasoning behind every
 design choice.
@@ -66,19 +66,20 @@ orchestration and report are all working.
 
 ## The two real pipelines (Google Colab or Kaggle)
 
-Both notebooks run on **Colab or Kaggle** — they detect the platform, get the
-data, run a pretrained model, and produce a validation report. On Kaggle,
-enable a GPU accelerator and turn Internet on; the 2D pipeline is easiest there
-since CBIS-DDSM is a native Kaggle dataset (just *+ Add Input*).
+Both notebooks run on **Colab or Kaggle** — they detect the platform, fetch the
+data, and produce a validation report. The 2D notebook needs a GPU (it
+fine-tunes a CNN); the 3D FROC notebook needs only Internet — it is pure metric
+computation on a few MB of metadata.
 
-| Notebook | Modality | Dataset | Model |
+| Notebook | Modality | Dataset | Model / detector |
 |---|---|---|---|
-| [`notebooks/01_validation_2d_cbis_ddsm.ipynb`](notebooks/01_validation_2d_cbis_ddsm.ipynb) | 2D mammography | CBIS-DDSM (Kaggle JPEG mirror, ~6 GB) | HuggingFace Swin-V2 breast classifier |
-| [`notebooks/02_validation_3d_duke_dbt.ipynb`](notebooks/02_validation_3d_duke_dbt.ipynb) | 3D tomosynthesis | Duke BCS-DBT (TCIA subset) | 2D model aggregated over slices |
+| [`notebooks/01_validation_2d_cbis_ddsm.ipynb`](notebooks/01_validation_2d_cbis_ddsm.ipynb) | 2D mammography | CBIS-DDSM (Kaggle JPEG mirror, ~6 GB) | ImageNet CNN fine-tuned on CBIS-DDSM |
+| [`notebooks/02_validation_3d_duke_dbt.ipynb`](notebooks/02_validation_3d_duke_dbt.ipynb) | 3D tomosynthesis (FROC) | Duke BCS-DBT metadata + DBTex predictions | real DBTex-challenge submissions |
 
-Dataset access and caveats: [`docs/datasets.md`](docs/datasets.md). Full 2D
-pipeline walkthrough — components, model, results, engineering log:
-[`docs/2d_pipeline.md`](docs/2d_pipeline.md).
+Dataset access and caveats: [`docs/datasets.md`](docs/datasets.md). Full
+pipeline walkthroughs — components, models, results, engineering log:
+[`docs/2d_pipeline.md`](docs/2d_pipeline.md) ·
+[`docs/3d_pipeline.md`](docs/3d_pipeline.md).
 
 You can also run the pipeline headless on any predictions CSV:
 
@@ -93,12 +94,17 @@ python scripts/run_validation.py preds.csv \
 
 ## The validation report
 
-A **real example**, generated on the CBIS-DDSM test split (fine-tuned ResNet-50,
-AUC 0.772), is committed at
-[`docs/cbis_ddsm_validation_report.html`](docs/cbis_ddsm_validation_report.html)
-— [**rendered view**](https://htmlpreview.github.io/?https://github.com/Joana-Mansa/breast-ai-clinical-validation/blob/main/docs/cbis_ddsm_validation_report.html).
+Two **real generated reports** are committed in the repo:
 
-A single HTML file with ten sections:
+- **2D** — CBIS-DDSM test split, fine-tuned ResNet-50, AUC 0.772:
+  [`docs/cbis_ddsm_validation_report.html`](docs/cbis_ddsm_validation_report.html)
+  ([rendered](https://htmlpreview.github.io/?https://github.com/Joana-Mansa/breast-ai-clinical-validation/blob/main/docs/cbis_ddsm_validation_report.html))
+- **3D** — Duke BCS-DBT FROC localisation, DBTex `nyu_bteam` submission, mean
+  sensitivity 0.987:
+  [`docs/duke_dbt_froc_report.html`](docs/duke_dbt_froc_report.html)
+  ([rendered](https://htmlpreview.github.io/?https://github.com/Joana-Mansa/breast-ai-clinical-validation/blob/main/docs/duke_dbt_froc_report.html))
+
+The exam-level (2D) report is a single HTML file with ten sections:
 
 1. **Executive summary** — headline AUC, operating point, reader verdict
 2. **Validation cohort** — prevalence, patient count, subgroups
