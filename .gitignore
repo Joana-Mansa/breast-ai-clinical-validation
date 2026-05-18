@@ -1,5 +1,7 @@
-# Data — never commit medical images or PHI-adjacent files
-data/
+# Data — never commit medical images or PHI-adjacent files.
+# Leading slash anchors to the repo root, so this ignores the top-level
+# data/ download folder but NOT the mammoval/data/ source package.
+/data/
 *.dcm
 *.DICOM
 
@@ -8,11 +10,11 @@ data/
 *.pt
 *.ckpt
 *.onnx
-weights/
+/weights/
 
 # Pipeline outputs
-outputs/
-reports/
+/outputs/
+/reports/
 *.html
 
 # Credentials
@@ -26,7 +28,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .ipynb_checkpoints/
-build/
-dist/
+/build/
+/dist/
 .venv/
 venv/
