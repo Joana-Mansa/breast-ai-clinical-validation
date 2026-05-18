@@ -156,8 +156,10 @@ def build_2d():
         code("from mammoval.models import HFImageClassifier\n"
              "\n"
              "model = HFImageClassifier()    # or HFImageClassifier('your/model-id')\n"
-             "print('model :', model.name)\n"
-             "print('labels:', model.id2label, '| malignant index =', model.malignant_index)"),
+             "print('model        :', model.name)\n"
+             "print('labels       :', model.id2label,\n"
+             "      '| malignant index =', model.malignant_index)\n"
+             "print('preprocessing :', model.preprocess_source)"),
 
         md("## 5 · Run inference → predictions table\n"
            "`score_dataset` runs the model over every case and returns the case "
