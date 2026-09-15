@@ -132,7 +132,7 @@ mammoval/
   plotting.py     ROC / FROC / calibration / forest / decision-curve plots
 notebooks/        the two Colab validation notebooks
 scripts/          dataset download + headless CLI + notebook generator
-tests/            28 unit + integration tests
+tests/            unit + integration tests
 docs/             methodology, metrics reference, dataset notes
 examples/         synthetic end-to-end demo
 ```
@@ -155,7 +155,7 @@ Full reference: [`docs/metrics_reference.md`](docs/metrics_reference.md).
 ## Installation
 
 ```bash
-git clone <your-fork-url> breast-ai-clinical-validation
+git clone https://github.com/Joana-Mansa/breast-ai-clinical-validation.git
 cd breast-ai-clinical-validation
 pip install -r requirements.txt          # validation engine + demo
 pip install -r requirements-models.txt   # only for real model inference
@@ -167,7 +167,7 @@ Python ≥ 3.9. `torch` / `torchvision` are pre-installed in Colab.
 ## Testing
 
 ```bash
-python -m pytest -q          # 28 tests, ~30 s
+python -m pytest -q          # core tests; optional model checks run when torch/torchvision are installed
 ```
 
 The tests pin each metric to a value known by construction — DeLong AUC against
@@ -202,3 +202,7 @@ regulatory submission and not a medical device. Full discussion in
 
 MIT — see [`LICENSE`](LICENSE). Dataset and model licences are held by their
 respective owners and are **not** redistributed here.
+
+## Maintenance verification
+
+The full existing suite passed **38 tests** on 15 September 2026 with the optional PyTorch dependencies available. The synthetic demo also generated its HTML report (synthetic AUC 0.867, FROC mean sensitivity 0.849). These synthetic results are separate from the historical real-data reports above. See [validation instructions](docs/validation.md).
