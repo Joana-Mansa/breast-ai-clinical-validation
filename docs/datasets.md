@@ -1,19 +1,19 @@
 # Datasets
 
-The pipeline validates against two public, ethically released datasets — one
+The pipeline evaluates predictions using two public datasets: one
 2D, one 3D. Both are normalised by their loader into the single case table
 described in `mammoval/data/base.py`.
 
 ---
 
-## CBIS-DDSM — 2D scanned-film mammography
+## CBIS-DDSM
 
-**What it is.** The *Curated Breast Imaging Subset of DDSM* — a cleaned,
+**What it is.** The *Curated Breast Imaging Subset of DDSM*: a cleaned,
 re-curated subset of the Digital Database for Screening Mammography, with
 verified lesion segmentations and biopsy-proven pathology. ~3,100 mammography
 studies, ~6,775 annotated abnormalities, 1,566 patients.
 
-**Why it suits clinical validation.** It carries the fields a stratified
+**Available annotations.** It carries the fields a stratified
 validation needs: biopsy-confirmed pathology, BI-RADS *assessment*, breast
 density (1–4), lesion type (mass vs calcification), subtlety (1–5), and a
 fixed, published train/test split.
@@ -38,7 +38,7 @@ jpeg/<study-hash>/*.jpg
 `abnormality type`, `assessment` (BI-RADS 0–5), `pathology`
 (`MALIGNANT` / `BENIGN` / `BENIGN_WITHOUT_CALLBACK`), `subtlety` (1–5).
 
-**The path-join gotcha.** The case CSVs' `image file path` still holds *original
+**Image-path resolution.** The case CSVs' `image file path` still holds *original
 DICOM* paths, not the mirror's JPEG paths. `CBISDDSMDataset` solves this with a
 CBIS-DDSM quirk: each DICOM's `PatientID` tag equals the descriptive study
 string (e.g. `Mass-Training_P_00001_LEFT_CC`). The loader reconstructs that
@@ -49,10 +49,10 @@ failing silently.
 **Validation caveats.**
 
 - **Digitised film, not FFDM.** A genuine domain shift from a modern digital
-  screening device — relevant when interpreting absolute numbers.
+  screening device: relevant when interpreting absolute numbers.
 - **Lesion-enriched, non-consecutive.** Prevalence is a curation artefact;
   cancer detection rate and recall rate are illustrative, not epidemiological.
-- `BENIGN_WITHOUT_CALLBACK` means a benign finding not recalled at screening —
+- `BENIGN_WITHOUT_CALLBACK` means a benign finding not recalled at screening:
   it is grouped as non-malignant (`y_true = 0`).
 
 **Citation.** Lee RS et al. (2017). A curated mammography data set for use in
@@ -60,12 +60,12 @@ computer-aided detection and diagnosis research. *Scientific Data* 4:170177.
 
 ---
 
-## Duke BCS-DBT — 3D digital breast tomosynthesis
+## Duke BCS-DBT
 
-**What it is.** The Duke *Breast-Cancer-Screening-DBT* collection — a real
+**What it is.** The Duke *Breast-Cancer-Screening-DBT* collection: a real
 screening-population tomosynthesis dataset: 5,060 patients, 5,610 studies,
 22,032 reconstructed volumes. Each view (LCC/RCC/LMLO/RMLO) is a multi-frame
-DICOM — a 3D stack of reconstructed slices.
+DICOM: a 3D stack of reconstructed slices.
 
 **Labels.** One four-way label per view:
 
@@ -79,22 +79,20 @@ DICOM — a 3D stack of reconstructed slices.
 For binary cancer detection the positive class is `Cancer`; `Normal`,
 `Actionable` and `Benign` form the non-cancer class. For biopsied lesions
 (`Benign` / `Cancer`) ground-truth **bounding boxes with a centre slice** are
-provided — this is what enables FROC.
+provided: this is what enables FROC.
 
 **Access.** TCIA collection `Breast-Cancer-Screening-DBT`, DOI
 `10.7937/E4WT-CD02`. Download via the NBIA Data Retriever (manifest files) or
-the `tcia_utils` Python API. **The full collection is ~1.5 TB** — the pipeline
-is subset-first: pull the ~79 GB validation split, or a few hundred views via a
-custom selection (see the 3D notebook).
+the `tcia_utils` Python API. The full image collection is large. The included 3D notebook downloads only the metadata and prediction files needed for FROC evaluation.
 
-**Metadata CSVs** (filenames vary across TCIA snapshots — `-v2`, `-PHASE-2`
-suffixes — so `DukeDBTDataset` locates them by glob):
+**Metadata CSVs** (filenames vary across TCIA snapshots: `-v2`, `-PHASE-2`
+suffixes: so `DukeDBTDataset` locates them by glob):
 
-- `BCS-DBT-file-paths-{split}*.csv` — `PatientID, StudyUID, View,
+- `BCS-DBT-file-paths-{split}*.csv`: `PatientID, StudyUID, View,
   descriptive_path, classic_path`
-- `BCS-DBT-labels-{split}*.csv` — `StudyUID, View` + one-hot
+- `BCS-DBT-labels-{split}*.csv`: `StudyUID, View` + one-hot
   `Normal, Actionable, Benign, Cancer`
-- `BCS-DBT-boxes-{split}*.csv` — `PatientID, StudyUID, View, X, Y, Width,
+- `BCS-DBT-boxes-{split}*.csv`: `PatientID, StudyUID, View, X, Y, Width,
   Height, Slice, Class, AD, VolumeSlices`
 
 **Splits.** By views/scans: train 19,148 / validation 1,163 / test 1,721.
@@ -107,17 +105,9 @@ sensitivity at 1, 2, 3, 4 false positives per volume; their mean is the
 challenge ranking metric. Implemented exactly in
 `mammoval/metrics/localization.py: duke_dbt_hit`.
 
-**No pretrained detector.** The Duke BCS-DBT / DBTex baselines
-(`mateuszbuda/duke-dbt-detection`, `mazurowski-lab/DBTex-baseline`) publish
-training code but **no downloadable weights**. Consequently:
+**Implemented workflow.** The 3D notebook downloads metadata and `team_predictions_bothphases.zip`, then evaluates saved DBTex challenge detections. It does not generate simulated detector predictions or run a volume classifier. Image downloads are unnecessary for this workflow.
 
-- *Classification* is run end-to-end with a `SliceAggregatorClassifier` (a
-  validated 2D model applied over the slice stack — how DBT triage products
-  operate in practice).
-- *Localisation (FROC)* is fully implemented to the official spec and consumes
-  a detector's `predictions.csv`. Until a real detector is trained, the 3D
-  notebook supplies a clearly-labelled simulated prediction file so the FROC
-  pipeline still runs end-to-end.
+**Classification extension.** Applying `SliceAggregatorClassifier` to DICOM volumes requires local images and an appropriate model. No verified exam-level classification result is included.
 
 **DICOM note.** `DukeDBTDataset.load` uses a plain `pydicom` read (compressed
 transfer syntaxes need `pylibjpeg`). For localisation work that must align with
@@ -136,12 +126,12 @@ Both datasets anchor positives to **biopsy/pathology**. This is the appropriate
 reference standard for a cancer-detection device, but two caveats carry into
 every report:
 
-- **Verification bias** — cases sent to biopsy are not a random sample of the
+- **Verification bias**: cases sent to biopsy are not a random sample of the
   screening population; metrics computed on a biopsy-enriched cohort do not
   transfer unchanged to consecutive screening.
-- **Interval cancers** — cancers surfacing *between* screening rounds are the
+- **Interval cancers**: cancers surfacing *between* screening rounds are the
   hardest test of a device and are largely absent from these datasets; true
   programme sensitivity must account for them.
 
 Neither dataset is a substitute for a prospective, consecutively-recruited
-screening cohort — see `methodology.md` §11.
+screening cohort: see [methodology](methodology.md#limitations).

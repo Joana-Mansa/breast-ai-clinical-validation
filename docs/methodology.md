@@ -1,295 +1,77 @@
-# Clinical Validation Methodology
+# Evaluation methodology
 
-This document explains *what* the pipeline measures and *why* — the reasoning a
-clinical validation function is responsible for, independent of any particular
-model or dataset. It is written against the use case of an AI device for breast
-cancer detection in 2D digital mammography (DM) and 3D digital breast
-tomosynthesis (DBT), such as a CADe/CADt decision-support product.
+The pipeline evaluates saved model scores or lesion detections against dataset labels. Its purpose is to describe retrospective performance, uncertainty and differences between subgroups.
 
----
+[Project overview](../README.md) · [Metrics reference](metrics_reference.md)
 
-## 1. Validation is not model development
+## Study scope
 
-Model development asks *"can I make this network better?"*. Clinical validation
-asks a different, narrower, higher-stakes question:
+Keep model training, model selection and final evaluation separate. Record the dataset version, split, label definition, exclusions and unit of analysis with each result. When multiple images belong to one patient, preserve the patient identifier.
 
-> *Given this device, exactly as it will ship — does the evidence support its
-> intended use, and where does it fail?*
+The included classification workflow trains on the CBIS-DDSM training split and evaluates on its test split. Several operating points are estimated from the evaluation cohort. These describe the observed ROC curve; validating a fixed decision threshold requires selecting it separately and evaluating it on held-out data.
 
-The discipline that follows from that question:
+The project reports standalone performance. It does not run a prospective trial or a multi-reader multi-case study, and it does not establish benefit from AI-assisted reading or regulatory compliance.
 
-- **The model is a sealed black box.** The pipeline never trains, fine-tunes or
-  threshold-tunes the model on the evaluation data. It runs inference and
-  measures. In this codebase that stance is structural: a model enters only
-  through the `ImageClassifier` / `VolumeClassifier` interface
-  (`mammoval/models/base.py`), and the metrics never see anything but a
-  predictions table.
-- **The reference standard is fixed in advance.** Ground truth is biopsy /
-  pathology where available, and the dataset's labelling rule otherwise.
-- **Analyses are pre-specified.** Operating points, the non-inferiority margin,
-  subgroups and the primary endpoint are chosen *before* seeing results, so the
-  study cannot drift into post-hoc cherry-picking.
-- **Every estimate carries an interval.** A point estimate without a confidence
-  interval is not a validation result.
+## Discrimination and uncertainty
 
----
+- **ROC AUC** measures how well scores rank positive cases above negative cases.
+- **Partial AUC** restricts evaluation to a configured false-positive-rate range.
+- **DeLong intervals** estimate uncertainty in AUC. Paired DeLong comparisons account for two scores measured on the same cases.
+- **Patient-cluster bootstrap** resamples patients together with their images to account for repeated observations. It addresses dependence within this sample, not differences between institutions or populations.
 
-## 2. Regulatory frame
+AUC depends on the distribution of scores in each class. It should not be interpreted as a dataset-independent property of a model.
 
-A breast AI device is *Software as a Medical Device* (SaMD). Two themes shape
-the evidence it needs.
+## Operating points
 
-**Intended use determines the bar.** The same algorithm is a different device
-depending on its claim:
+The classification report estimates sensitivity at target specificities, with defaults of 0.90 and 0.96. It also reports confusion matrices and a Youden operating point.
 
-| Claim | Regulatory character | What must be shown |
-|---|---|---|
-| Concurrent reader aid (CADe) | Marks shown alongside the radiologist | The radiologist performs **better with** the aid — needs a reader study |
-| Triage / worklist (CADt) | Re-orders or flags exams | Time-to-decision and that cancers are not down-triaged |
-| Standalone / autonomous reader | AI replaces a read | AI is **non-inferior** (or superior) to a radiologist |
+A threshold selected from the same cohort being evaluated can give optimistic performance estimates. The reported thresholds are exploratory unless they were fixed independently. Target specificity alone does not establish an appropriate clinical operating point.
 
-**Standalone performance is necessary but not sufficient.** Retrospective
-standalone metrics (this pipeline's Sections 3–8) characterise the device in
-isolation. A *clinical benefit* claim additionally needs to show what happens
-when a radiologist uses it — Section 9 below. Regulators (FDA SaMD guidance and
-the predetermined change control plan / PCCP for model updates; EU MDR with
-CE-marking under a notified body) expect both, plus evidence the device
-generalises beyond its development data.
+## Lesion localisation
 
-This pipeline produces the **standalone retrospective** layer of that evidence
-and is explicit about what it does *not* establish.
+Free-response ROC (FROC) measures lesion sensitivity against false detections per image or volume. A geometric matching rule determines whether a detection corresponds to an annotated lesion.
 
----
+The Duke path uses `duke_dbt_hit`: the predicted centre must lie within `max(sqrt(W² + H²) / 2, 100)` pixels of the annotated centre and within `VolumeSlices / 4` slices. Detections are matched in descending score order. The summary averages sensitivity at 1, 2, 3 and 4 false positives per volume.
 
-## 3. Standalone discrimination — ROC / AUC
+See [the 3D guide](3d_pipeline.md) for coordinate handling, data assembly and limitations of the annotations.
 
-The first question is purely about ranking: does the AI score order cancers
-above non-cancers? The **ROC AUC** answers it threshold-free and
-prevalence-free.
+## Calibration and decision curves
 
-- **Confidence interval — DeLong.** The AUC is an estimate; its uncertainty is
-  reported with **DeLong's method** (`metrics/delong.py`), the standard
-  closed-form, non-parametric variance estimator. It is the right tool because
-  validation data is *paired*: every case has an AI score and a reference
-  standard, so a single CI and any model-vs-model comparison must use the
-  correlated-ROC variance.
-- **Partial AUC.** Screening runs at high specificity — a radiologist recalls
-  only a few percent of women. Discrimination in the low-specificity part of
-  the ROC is clinically irrelevant and can inflate the global AUC. The pipeline
-  also reports the **standardised partial AUC** over specificity 0.80–1.00.
-- **Patient-level confidence interval.** A woman contributes up to four views
-  (L/R × CC/MLO); views from one woman are correlated. Treating views as
-  independent *understates* uncertainty. The pipeline adds a **cluster
-  bootstrap** that resamples whole patients (`metrics/bootstrap.py`); its
-  interval is wider, and that extra width is real.
+Calibration compares predicted probabilities with observed outcome frequencies. The report includes reliability curves, Brier score, expected calibration error, and calibration intercept and slope.
 
-A useful external benchmark: Rodríguez-Ruiz et al. (2019) found a commercial
-breast AI reached a standalone AUC of **0.840** against a mean radiologist AUC
-of **0.814** across nine datasets — i.e. a credible standalone device sits in
-radiologist territory, and a validation should be powered to resolve
-differences of that size.
+These estimates depend on the evaluation cohort. A nonzero calibration intercept can indicate systematic bias; it does not identify a unique cause. Scores that are not probabilities should be evaluated with calibration disabled.
 
----
+Decision curves calculate net benefit over assumed decision thresholds. They illustrate the consequences of those assumptions and the sampled outcomes; they do not by themselves establish clinical usefulness.
 
-## 4. Operating points
+## Screening and triage summaries
 
-An ROC curve is a menu; a deployed device eats one item from it. The pipeline
-reports performance at **fixed, clinically meaningful specificities** (default
-0.90 and 0.96), because in screening the false-positive rate is the binding
-constraint — every false positive is a recalled, anxious, healthy woman and a
-downstream cost.
+The report computes cancer-detection rate, recall rate and positive predictive value, and simulates rule-out thresholds and score bands. These quantities depend on the cohort and its prevalence.
 
-At each operating point it gives sensitivity (with a bootstrap CI), the
-achieved specificity, the full confusion matrix and PPV. The Youden point is
-reported too, but only as a reference: a real screening threshold is set to a
-target recall rate, not to a statistical optimum.
+CBIS-DDSM is lesion-enriched and non-consecutive. Its screening and workload summaries are illustrations of the calculations, not estimates for a screening programme. Simulated triage results do not establish that reducing workload would be safe in practice.
 
-**The threshold-transfer problem.** A threshold chosen on this cohort will not
-deliver the same specificity on a population with a different prevalence or
-case mix. Operating points are characterised here; a deployed threshold must be
-fixed prospectively and then monitored.
+## Subgroups
 
----
+The pipeline reports AUC and uncertainty by available subgroup, such as breast density or lesion type, and uses Cochran's Q to summarise heterogeneity across strata.
 
-## 5. Lesion localisation — FROC
+Interpret subgroup results with sample sizes, class counts and repeated-patient structure. Multiple comparisons are exploratory. A significant difference does not establish its cause, and a nonsignificant difference does not establish equivalent performance.
 
-Exam-level AUC has a blind spot: a model can call the exam correctly *for the
-wrong reason* — high score, mark in the wrong place. For a CADe device that
-draws regions, **where the mark lands is the product**.
+## Reference-reader comparison
 
-**Free-response ROC (FROC)** scores each mark. A mark is a true positive only
-if it satisfies a geometric hit criterion against a ground-truth lesion;
-everything else is a false mark. FROC plots lesion-localisation sensitivity
-against **mean false marks per image**. Unlike ROC its x-axis is unbounded, so
-performance is read off at clinically tolerable mark rates.
+The classification workflow can compare AI scores with a reference-score column using paired DeLong and AUC non-inferiority calculations. The non-inferiority margin is configurable and must be justified independently for any confirmatory interpretation.
 
-The pipeline implements the **official Duke BCS-DBT criterion** exactly
-(`metrics/localization.py: duke_dbt_hit`): a hit requires the predicted box
-centre within `max(√(W²+H²)/2, 100)` pixels of the ground-truth centre **and**
-within `VolumeSlices/4` slices of it. The reported mean sensitivity at 1/2/3/4
-false marks per volume reproduces the official DBTex challenge ranking metric,
-so numbers are comparable to published baselines.
+CBIS-DDSM BI-RADS assessment is an ordinal proxy. Category 0 denotes an incomplete assessment and does not fit a simple malignancy ranking. This comparison demonstrates the calculation; it is not an independent reader study or a measurement of AI-assisted radiologist performance.
 
----
+## Limitations
 
-## 6. Calibration and clinical utility
-
-Discrimination and calibration are independent. A model can rank perfectly yet
-be badly calibrated — and any decision that treats the score as a *probability*
-(a rule-out threshold, a risk band, an exchange-rate calculation) is corrupted
-by miscalibration.
-
-- **Reliability diagram + Brier score + ECE** — does "score 0.1" mean roughly a
-  10% cancer rate?
-- **Calibration slope and intercept.** Slope < 1 means the model is
-  over-confident. A non-zero intercept is *calibration-in-the-large* drift — the
-  signature of deploying a model where prevalence differs from training, which
-  is the normal situation when an enriched-data model meets a screening
-  population.
-- **Decision-curve analysis (net benefit).** Translates the score into the unit
-  a clinician values — net true positives per patient after charging for false
-  positives at the rate a decision threshold implies. The device is useful over
-  the threshold range where its curve beats both *treat-all* and *treat-none*.
-
----
-
-## 7. Screening behaviour and AI triage
-
-Discrimination is abstract; a radiology department reports concrete numbers.
-The pipeline computes, at the primary operating point, the metrics a screening
-programme and a regulator actually quote:
-
-- **Cancer detection rate (CDR)** — screen-detected cancers per 1,000 exams;
-- **Recall / abnormal-interpretation rate** — fraction of women called back;
-- **PPV of recall (PPV1)**, sensitivity, specificity.
-
-It then simulates the two clinical uses a Transpara-style device is positioned
-for:
-
-- **Rule-out / triage.** Exams below a low score are deprioritised or
-  auto-classified normal. The pipeline sweeps the rule-out threshold and reports
-  the trade-off curve: workload reduction (efficiency) against sensitivity
-  retained and **missed cancers** (safety). The defensible operating point is
-  the largest workload cut that keeps sensitivity above a pre-agreed floor —
-  the safety question, *how many cancers are in the ruled-out band*, is never
-  hidden.
-- **Risk banding.** The continuous score is mapped to ordinal bands (the spirit
-  of a 1–10 exam score) and the observed cancer rate per band is checked for
-  monotonic increase — evidence the score is a genuine risk stratifier.
-
-**Cohort caveat.** On an enriched, non-consecutive dataset (e.g. CBIS-DDSM)
-prevalence is a curation artefact, so CDR and recall rate are *illustrative of
-the metric*, not programme estimates. The pipeline states this in the report
-rather than letting the numbers be misread.
-
----
-
-## 8. Subgroup analysis — effect modifiers
-
-A pooled AUC can conceal a subgroup where the device is unsafe. The pre-eminent
-example in mammography is **breast density**: dense tissue masks tumours and
-depresses sensitivity for radiologists and AI alike, and dense-breast women are
-exactly the group with the greatest unmet need. Density is a candidate
-**effect modifier**, not a nuisance variable.
-
-The pipeline estimates AUC within each subgroup with a DeLong CI and applies
-**Cochran's Q** heterogeneity test across strata (`metrics/subgroups.py`). A
-significant Q is evidence the variable modifies performance: the device should
-then be reported — and possibly operating-point-tuned — per stratum, not
-pooled. Standard strata: breast density, lesion type (mass vs calcification),
-view, and where available age, scanner vendor and site.
-
-This is also where **generalisation** is probed. The confidence intervals in
-Sections 3–7 quantify *sampling error only*. They say nothing about
-distribution shift across vendor, site, ethnicity or acquisition era. That
-requires an *external* validation cohort — the single most important extension
-of this pipeline, and a known strength claim for multi-vendor-validated
-devices.
-
----
-
-## 9. From standalone to clinical benefit — the reader study
-
-Standalone metrics do not tell you whether *patients* are better off, because
-the device is used by a radiologist, not instead of one. The definitive design
-is the **Multi-Reader Multi-Case (MRMC) study**: many radiologists read the
-same cases with and without the AI, and the change in their performance —
-analysed with the Dorfman-Berbaum-Metz / Obuchowski-Rockette framework that
-accounts for reader *and* case variability — is the endpoint.
-
-This pipeline does **not** run an MRMC study. What it does provide is the
-honest adjacent analysis: an **AI-vs-reference-reader comparison**. Using a
-proxy reader signal — BI-RADS *assessment* in CBIS-DDSM — it runs:
-
-- a **paired DeLong test** of AI AUC vs reader AUC (paired because both scored
-  the same cases), and
-- a **non-inferiority test**: AI is declared non-inferior if the lower
-  confidence bound on `AUC_AI − AUC_reader` exceeds a pre-specified `−margin`.
-
-Non-inferiority, not superiority, is usually the right standalone question — the
-claim is rarely "AI beats the radiologist" but "AI is *not meaningfully worse*",
-which is what supports a workload-reduction or autonomous-read use case. The
-margin is a clinical judgement and must be fixed before analysis.
-
-**Caveat, stated plainly.** BI-RADS assessment is an ordinal proxy, not an
-independent prospective radiologist read, and category 0 ("incomplete") is not
-strictly ordered between 1 and 2. The comparison demonstrates the *method*; a
-real claim needs real reader data.
-
----
-
-## 10. Statistical principles
-
-- **Pairing.** AI, reference standard and (where present) reader are measured
-  on the same cases. Comparisons use paired methods — DeLong's correlated-ROC
-  variance, or a paired bootstrap that resamples shared indices.
-- **Confidence intervals.** DeLong for AUC; **Wilson** score intervals for
-  proportions (sensitivity, specificity, PPV — well behaved for the small
-  counts of a thin subgroup); **percentile bootstrap** for everything else.
-- **Clustering.** The unit of analysis is the image/view; the unit of
-  independence is the woman. Patient-level cluster bootstrap respects that.
-- **Non-inferiority.** A one-sided test against a pre-specified margin — the
-  correct frame for a "not worse than the radiologist" claim.
-- **Multiplicity.** Subgroups and multiple operating points inflate the
-  family-wise error rate. The pipeline reports them as *exploratory*; a
-  confirmatory study pre-specifies a single primary endpoint and adjusts.
-- **Power.** A validation must be large enough to resolve a clinically
-  meaningful AUC difference (≈0.02–0.05); cancers, not exams, are the scarce
-  resource that drives sample size.
-
----
-
-## 11. Limitations of this pipeline
-
-- It is a **retrospective standalone** pipeline. It does not run a prospective
-  trial or an MRMC reader study.
-- Public datasets diverge from a live screening population: CBIS-DDSM is
-  **digitised film**, lesion-enriched and non-consecutive; the Duke DBT subset
-  used here is small. Absolute numbers are not programme estimates.
-- The default models are **baselines** chosen for runnable reproducibility, not
-  state-of-the-art devices; the pipeline quantifies their shortfall rather than
-  hiding it.
-- Confidence intervals cover **sampling error only** — not distribution shift,
-  not label noise, not verification bias in the reference standard.
-- It is an **educational / methodological** tool. It is not a regulatory
-  submission and not a cleared medical device.
-
-These limitations are surfaced in every generated report, by design — a
-validation tool that oversells is worse than useless.
-
----
+- Historical public datasets may differ from the population, equipment and acquisition practices of an intended application.
+- Missing images and excluded rows can alter the evaluated cohort. Review reported exclusions.
+- Confidence intervals describe sampling uncertainty under their assumptions. They do not account for all label errors, verification bias or dataset shift.
+- Geometric lesion matching does not measure clinical relevance or reading behaviour.
+- The available results do not establish clinical deployment readiness.
 
 ## References
 
-- DeLong ER, DeLong DM, Clarke-Pearson DL (1988). Comparing areas under
-  correlated ROC curves. *Biometrics*.
-- Sun X, Xu W (2014). Fast implementation of DeLong's algorithm. *IEEE SPL*.
-- Rodríguez-Ruiz A et al. (2019). Stand-alone AI for breast cancer detection
-  vs 101 radiologists. *JNCI*.
-- Bunch PC et al.; Chakraborty DP. Free-response ROC (FROC) methodology.
-- Buda M et al. (2021). A data set and deep-learning algorithm for mass
-  detection in DBT (Duke BCS-DBT). *JAMA Network Open*.
-- Vickers AJ, Elkin EB (2006). Decision-curve analysis. *Med Decis Making*.
-- Gallas BD et al. MRMC ROC analysis for imaging-device assessment.
-- FDA — *Clinical Performance Assessment for CADe Devices*; SaMD guidance and
-  the Predetermined Change Control Plan (PCCP).
+- DeLong ER, DeLong DM, Clarke-Pearson DL (1988). Comparing the areas under two or more correlated receiver operating characteristic curves. *Biometrics*.
+- Sun X, Xu W (2014). Fast implementation of DeLong's algorithm for comparing the areas under correlated receiver operating characteristic curves. *IEEE Signal Processing Letters*.
+- Vickers AJ, Elkin EB (2006). Decision curve analysis: a novel method for evaluating prediction models. *Medical Decision Making*.
+- Buda M et al. (2021). A data set and deep learning algorithm for the detection of masses and architectural distortions in digital breast tomosynthesis. *JAMA Network Open*.

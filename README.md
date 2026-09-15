@@ -1,87 +1,62 @@
-# Breast Cancer AI — Clinical Validation Pipeline
+# 🩺 Breast Cancer AI: Clinical Validation Pipeline
 
-A reproducible pipeline for the **clinical validation** of breast-cancer
-detection AI on **2D mammography** and **3D digital breast tomosynthesis
-(DBT)**, built with publicly available datasets and pretrained models.
+Evaluate breast-cancer model predictions on **2D mammography** and **3D digital breast tomosynthesis (DBT)**. The Python package, `mammoval`, computes performance metrics and produces a self-contained HTML report.
 
-It is designed around the workflow a clinical validation function owns at a
-commercial breast-AI company — the kind of standalone, regulator-grade
-evidence that supports a CADe / CADt / decision-support mammography device
-(e.g. products such as Transpara). The emphasis is deliberately **not** on
-building a better model: it is on *measuring* a model rigorously, treating it
-as a sealed black box, and reporting where it works and where it fails.
+The project includes a synthetic demonstration, a CBIS-DDSM classification notebook, and a Duke BCS-DBT lesion-localisation notebook. It is a retrospective research tool; its reports do not establish clinical readiness.
 
-> **The validation question:** *given this device exactly as it ships, does the
-> evidence support its intended use — and where does it fail?*
-
----
-
-## What it does
-
-- Treats any breast-cancer model as a **black box** behind a one-method adapter
-  — HuggingFace checkpoint, ONNX export, vendor API or synthetic stand-in.
-- Runs the full standalone validation battery: **discrimination, operating
-  points, localisation (FROC), calibration, screening behaviour, subgroup
-  analysis, and an AI-vs-radiologist comparison**.
-- Reports every estimate with a **confidence interval** — DeLong for AUC,
-  Wilson for proportions, bootstrap (incl. patient-level cluster) elsewhere.
-- Emits a single self-contained **HTML validation report** with embedded plots.
-- Is **unit-tested** (38 tests pinning metrics to known-by-construction values)
-  and runs **end-to-end with zero downloads** via a synthetic demo.
-
----
-
-## What is real vs. what needs your input
-
-Honesty is part of a validation tool. Here is exactly what runs out of the box:
-
-| Component | Status |
-|---|---|
-| Validation metrics engine | ✅ Real, unit-tested, verified against `sklearn` and known values |
-| Pipeline + HTML report | ✅ Real, runs end-to-end |
-| Synthetic demo (no downloads) | ✅ Runs in ~30 s — the runnability guarantee |
-| 2D path: CBIS-DDSM + fine-tuned CNN | ✅ Real & verified — AUC 0.772 on the CBIS-DDSM test split |
-| 3D path: Duke BCS-DBT FROC localisation | ✅ Real & verified — validates the real DBTex-challenge detector submissions against the official Duke metric, on a few MB of metadata |
-| 3D exam-level classification | ⚠️ Documented heavier extension — needs the ~1.5 TB DICOM set; no public 3D detector exists |
-| Default models | ⚠️ Reasonable **baselines**, not state-of-the-art — the pipeline *quantifies* their shortfall rather than hiding it |
-
-See [`docs/methodology.md`](docs/methodology.md) for the reasoning behind every
-design choice.
-
----
-
-## Quickstart — synthetic demo (no downloads)
+## 🚀 Quick start
 
 ```bash
+git clone https://github.com/Joana-Mansa/breast-ai-clinical-validation.git
+cd breast-ai-clinical-validation
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 python examples/demo_synthetic.py
 ```
 
-This fabricates a realistic predictions table — with a *deliberately built-in
-flaw* (AUC degrades in dense breasts) — runs the entire pipeline, and writes
-`outputs/demo_validation_report.html`. If this runs, the validation engine,
-orchestration and report are all working.
+Use Python 3.9 or later. On Windows, activate the environment with `.venv\Scripts\activate`.
 
----
+Open `outputs/demo_validation_report.html` in a browser. The demo uses generated predictions with deliberately different subgroup performance. It requires no dataset or model downloads after installation.
 
-## The two real pipelines (Google Colab or Kaggle)
+## 📂 Workflows
 
-Both notebooks run on **Colab or Kaggle** — they detect the platform, fetch the
-data, and produce a validation report. The 2D notebook needs a GPU (it
-fine-tunes a CNN); the 3D FROC notebook needs only Internet — it is pure metric
-computation on a few MB of metadata.
+| Workflow | Inputs | Guide |
+|---|---|---|
+| Synthetic demonstration | Generated labels, scores and detections | [Example](examples/demo_synthetic.py) |
+| 2D classification | CBIS-DDSM JPEG mirror and a fine-tuned CNN | [Notebook](notebooks/01_validation_2d_cbis_ddsm.ipynb) · [Guide](docs/2d_pipeline.md) |
+| 3D lesion localisation | Duke metadata and published DBTex detector predictions | [Notebook](notebooks/02_validation_3d_duke_dbt.ipynb) · [Guide](docs/3d_pipeline.md) |
+| Evaluate your predictions | CSV containing labels and model scores | [Command-line script](scripts/run_validation.py) |
 
-| Notebook | Modality | Dataset | Model / detector |
-|---|---|---|---|
-| [`notebooks/01_validation_2d_cbis_ddsm.ipynb`](notebooks/01_validation_2d_cbis_ddsm.ipynb) | 2D mammography | CBIS-DDSM (Kaggle JPEG mirror, ~6 GB) | ImageNet CNN fine-tuned on CBIS-DDSM |
-| [`notebooks/02_validation_3d_duke_dbt.ipynb`](notebooks/02_validation_3d_duke_dbt.ipynb) | 3D tomosynthesis (FROC) | Duke BCS-DBT metadata + DBTex predictions | real DBTex-challenge submissions |
+The 2D notebook trains a model and is intended for a GPU runtime. The 3D notebook evaluates saved detections on CPU using metadata, without downloading the image volumes. Exam-level 3D classification is an extension and has no verified result in this repository.
 
-Dataset access and caveats: [`docs/datasets.md`](docs/datasets.md). Full
-pipeline walkthroughs — components, models, results, engineering log:
-[`docs/2d_pipeline.md`](docs/2d_pipeline.md) ·
-[`docs/3d_pipeline.md`](docs/3d_pipeline.md).
+For model inference, install `requirements-models.txt`. To import `mammoval` outside the checkout, run `pip install -e .`.
 
-You can also run the pipeline headless on any predictions CSV:
+## 📊 Saved results
+
+These are results from the committed real-data reports. The synthetic demo and automated checks do not rerun these experiments.
+
+| Analysis | Recorded result | Report |
+|---|---|---|
+| CBIS-DDSM test split, fine-tuned ResNet-50 | ROC AUC **0.772**, 95% CI **0.726 to 0.818** | [HTML file](docs/cbis_ddsm_validation_report.html) · [Browser preview](https://htmlpreview.github.io/?https://github.com/Joana-Mansa/breast-ai-clinical-validation/blob/main/docs/cbis_ddsm_validation_report.html) |
+| Duke validation split, DBTex `nyu_bteam` predictions | Mean FROC sensitivity **0.987**, 95% CI **0.955 to 1.000** | [HTML file](docs/duke_dbt_froc_report.html) · [Browser preview](https://htmlpreview.github.io/?https://github.com/Joana-Mansa/breast-ai-clinical-validation/blob/main/docs/duke_dbt_froc_report.html) |
+
+Download an HTML report and open it locally if the preview service is unavailable. The DBTex detector predictions belong to the challenge teams; this project evaluates them.
+
+## What the report contains
+
+- ROC AUC, partial AUC and confidence intervals.
+- Sensitivity, specificity and confusion matrices at selected operating points.
+- Calibration, decision curves and simulated screening or triage metrics.
+- Subgroup comparisons and an optional comparison with reference-reader scores.
+- Lesion localisation through free-response ROC (FROC).
+- Cohort information and limitations.
+
+Sections depend on the supplied columns and whether classification or localisation results are provided. See the [metrics reference](docs/metrics_reference.md) for functions and uncertainty estimates.
+
+## Evaluate a predictions CSV
+
+The required columns are `y_true` (0 or 1) and `y_score`. Include `patient_id` for patient-level resampling. Reader and subgroup columns are optional.
 
 ```bash
 python scripts/run_validation.py preds.csv \
@@ -90,119 +65,36 @@ python scripts/run_validation.py preds.csv \
     --report outputs/report.html
 ```
 
----
+Omit `--reader` or `--subgroups` when those fields are absent. Use `--not-probability` for scores that should not be interpreted as probabilities. Run `python scripts/run_validation.py --help` for all options.
 
-## The validation report
+## 📚 Documentation
 
-Two **real generated reports** are committed in the repo:
-
-- **2D** — CBIS-DDSM test split, fine-tuned ResNet-50, AUC 0.772:
-  [`docs/cbis_ddsm_validation_report.html`](docs/cbis_ddsm_validation_report.html)
-  ([rendered](https://htmlpreview.github.io/?https://github.com/Joana-Mansa/breast-ai-clinical-validation/blob/main/docs/cbis_ddsm_validation_report.html))
-- **3D** — Duke BCS-DBT FROC localisation, DBTex `nyu_bteam` submission, mean
-  sensitivity 0.987:
-  [`docs/duke_dbt_froc_report.html`](docs/duke_dbt_froc_report.html)
-  ([rendered](https://htmlpreview.github.io/?https://github.com/Joana-Mansa/breast-ai-clinical-validation/blob/main/docs/duke_dbt_froc_report.html))
-
-The exam-level (2D) report is a single HTML file with ten sections:
-
-1. **Executive summary** — headline AUC, operating point, reader verdict
-2. **Validation cohort** — prevalence, patient count, subgroups
-3. **Discrimination** — ROC, AUC + DeLong CI, partial AUC, patient-cluster CI
-4. **Operating points** — sensitivity at fixed specificities, confusion matrices
-5. **Calibration & clinical utility** — reliability, Brier, slope, decision curve
-6. **Screening behaviour & AI triage** — CDR, recall rate, rule-out trade-off
-7. **Subgroup analysis** — per-stratum AUC + Cochran's Q effect-modifier test
-8. **AI vs reference reader** — paired DeLong test + non-inferiority test
-9. **Lesion localisation (FROC)** — official Duke operating points
-10. **Limitations** — surfaced in every report, by design
-
----
+| Guide | Contents |
+|---|---|
+| [Methodology](docs/methodology.md) | Study scope, metric interpretation and limitations |
+| [Datasets](docs/datasets.md) | Required files, labels and access |
+| [2D pipeline](docs/2d_pipeline.md) | Loading images, model training and classification reports |
+| [3D pipeline](docs/3d_pipeline.md) | DBTex predictions and FROC evaluation |
+| [Metrics reference](docs/metrics_reference.md) | Metric definitions and Python functions |
+| [Running the checks](docs/validation.md) | Tests, synthetic example and CI coverage |
 
 ## Project structure
 
-```
-mammoval/
-  metrics/        validation engine — discrimination, FROC, screening,
-                  calibration, bootstrap, subgroups   (the core deliverable)
-  data/           dataset loaders — CBIS-DDSM (2D), Duke BCS-DBT (3D)
-  models/         black-box model adapters + synthetic predictions
-  pipeline.py     orchestration: predictions table -> structured result
-  report.py       structured result -> standalone HTML report
-  plotting.py     ROC / FROC / calibration / forest / decision-curve plots
-notebooks/        the two Colab validation notebooks
-scripts/          dataset download + headless CLI + notebook generator
-tests/            unit + integration tests
-docs/             methodology, metrics reference, dataset notes
-examples/         synthetic end-to-end demo
+```text
+mammoval/       Dataset loaders, model adapters, metrics and report generation
+notebooks/      2D classification and 3D localisation workflows
+scripts/        Dataset download and CSV evaluation commands
+examples/       Synthetic demonstration
+tests/          Metric, loader, model and pipeline checks
+docs/           Guides and saved HTML reports
 ```
 
----
+## Verification and limitations
 
-## Metrics at a glance
+The full local suite passed **38 tests** with optional model dependencies installed. GitHub CI checks the core suite and synthetic demo. See [validation instructions](docs/validation.md) for the commands and scope.
 
-Discrimination (ROC AUC, partial AUC, non-inferiority) · Operating points
-(sensitivity at fixed specificity) · Localisation (FROC, official Duke metric)
-· Calibration (reliability, Brier, slope/intercept, decision curve) · Screening
-(cancer detection rate, recall rate, PPV1, triage/rule-out simulation, risk
-bands) · Uncertainty (DeLong, Wilson, stratified & cluster bootstrap) ·
-Subgroups (per-stratum AUC, Cochran's Q effect-modifier test).
+CBIS-DDSM is a lesion-enriched, digitised-film dataset. Its screening-rate calculations should not be interpreted as population estimates. BI-RADS assessment is a proxy reader score, not an independent reader study. Confidence intervals describe sampling uncertainty and do not establish performance on new sites or populations. Neither workflow measures the effect of AI assistance on radiologists.
 
-Full reference: [`docs/metrics_reference.md`](docs/metrics_reference.md).
+## License and attribution
 
----
-
-## Installation
-
-```bash
-git clone https://github.com/Joana-Mansa/breast-ai-clinical-validation.git
-cd breast-ai-clinical-validation
-pip install -r requirements.txt          # validation engine + demo
-pip install -r requirements-models.txt   # only for real model inference
-pip install -e .                         # optional: import mammoval anywhere
-```
-
-Python ≥ 3.9. `torch` / `torchvision` are pre-installed in Colab.
-
-## Testing
-
-```bash
-python -m pytest -q          # core tests; optional model checks run when torch/torchvision are installed
-```
-
-The tests pin each metric to a value known by construction — DeLong AUC against
-`sklearn`, FROC against hand-checked detection sets, calibration slope to ~1.0
-for calibrated scores, and so on.
-
----
-
-## Limitations
-
-This is a **retrospective standalone** validation pipeline. It does not run a
-prospective trial or a multi-reader multi-case (MRMC) reader study, and it does
-not establish how radiologists perform *with* the AI. Public datasets diverge
-from a live screening population; the default models are runnable baselines,
-not cleared devices. Confidence intervals cover sampling error only, not
-distribution shift. It is an educational / methodological project — not a
-regulatory submission and not a medical device. Full discussion in
-[`docs/methodology.md`](docs/methodology.md) §11.
-
----
-
-## Datasets & acknowledgements
-
-- **CBIS-DDSM** — Lee RS et al., *Scientific Data* 2017; via TCIA / the Kaggle
-  JPEG mirror.
-- **Duke BCS-DBT** — Buda M et al., *JAMA Network Open* 2021; via TCIA
-  (DOI 10.7937/E4WT-CD02).
-- Pretrained models are loaded from their original authors on the HuggingFace
-  Hub; licences are the authors'.
-
-## License
-
-MIT — see [`LICENSE`](LICENSE). Dataset and model licences are held by their
-respective owners and are **not** redistributed here.
-
-## Maintenance verification
-
-The full existing suite passed **38 tests** on 15 September 2026 with the optional PyTorch dependencies available. The synthetic demo also generated its HTML report (synthetic AUC 0.867, FROC mean sensitivity 0.849). These synthetic results are separate from the historical real-data reports above. See [validation instructions](docs/validation.md).
+Code: [MIT License](LICENSE). Dataset and model licences remain with their respective owners. See [dataset citations](docs/datasets.md) and [method references](docs/methodology.md#references).
