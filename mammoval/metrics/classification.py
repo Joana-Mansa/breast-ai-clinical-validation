@@ -8,6 +8,7 @@ separately in :mod:`mammoval.metrics.localization`.
 from __future__ import annotations
 
 import numpy as np
+from scipy.integrate import trapezoid
 from sklearn.metrics import roc_curve as _sk_roc_curve
 from sklearn.metrics import precision_recall_curve as _sk_pr_curve
 from sklearn.metrics import average_precision_score as _sk_ap
@@ -59,7 +60,7 @@ def partial_auc(y_true, y_score, spec_low=0.80, spec_high=1.00, standardized=Tru
     fpr_lo, fpr_hi = 1.0 - spec_high, 1.0 - spec_low
     grid = np.linspace(fpr_lo, fpr_hi, 1024)
     tpr_grid = np.interp(grid, fpr, tpr)
-    pauc = float(np.trapz(tpr_grid, grid))
+    pauc = float(trapezoid(tpr_grid, grid))
     width = fpr_hi - fpr_lo
     result = {"pauc": pauc, "spec_low": spec_low, "spec_high": spec_high,
               "fpr_range": [fpr_lo, fpr_hi]}
